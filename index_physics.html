@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="UTF-8">
+  <title>Document</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+    }
+  </style>
+</head>
+
+<body>
+  <button id="lock" style="position: absolute">Test</button>
+  <script src="node_modules/three/build/three.js"></script>
+  <script src="node_modules/three/examples/js/controls/PointerLockControls.js"></script>
+  <script src="node_modules/three/examples/js/controls/TransformControls.js"></script>
+  <script src="node_modules/three/examples/js/controls/OrbitControls.js"></script>
+  <script src="node_modules/cannon/build/cannon.js"></script>
+  <script src="node_modules/cannon/tools/threejs/CannonDebugRenderer.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/fflate@0.7.3/umd/index.min.js"></script>
+  <script>
+    var scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xffffff);
+    var camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 1000);
+
+    var renderer = new THREE.WebGLRenderer();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    document.body.appendChild(renderer.domElement);
+
+    camera.position.y = 1;
+
+    const AmbientLight = new THREE.AmbientLight(0x404040, 0.7);
+    scene.add(AmbientLight);
+
+    const textureLoader = new THREE.TextureLoader();
+
+    const skyTexture = textureLoader.load(
+      "./texture/OutdoorHDRI024_2K-TONEMAPPED.jpg", () => {
+        const rt = new THREE.WebGLCubeRenderTarget(skyTexture.image.height);
+        rt.fromEquirectangularTexture(renderer, skyTexture);
+        scene.background = rt.texture;
+      });
+
+    //area physics
+    let world = new CANNON.World();
+    world.gravity.set(0, -10, 0);
+    world.broadphase = new CANNON.NaiveBroadphase();
+    let timeStamp = 1.0 / 60.0;
+
+    let plane = new CANNON.Plane();
+    let planeBody = new CANNON.Body({ shape: plane, mass: 0 });
+    planeBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), THREE.Math.degToRad(-90));
+    world.addBody(planeBody);
+
+    let debugRenderer = new THREE.CannonDebugRenderer(scene, world);
+
+    //box 1
+    let boxG = new CANNON.Box(new CANNON.Vec3(0.5, 0.5, 0.5));
+    let boxBody = new CANNON.Body({ shape: boxG, mass: 5 });
+    boxBody.position.set(0, 5, 0);
+    world.addBody(boxBody);
+
+    let boxGeometry = new THREE.BoxGeometry(1, 1, 1);
+    let boxMaterial = new THREE.MeshBasicMaterial({ color: 0xFF00FF });
+    let boxMesh = new THREE.Mesh(boxGeometry, boxMaterial);
+    scene.add(boxMesh);
+
+    //box 2
+    let boxG2 = new CANNON.Box(new CANNON.Vec3(0.5, 0.5, 0.5));
+    let boxBody2 = new CANNON.Body({ shape: boxG2, mass: 0 });
+    boxBody2.position.set(2, 0, 0);
+    world.addBody(boxBody2);
+
+    let boxGeometry2 = new THREE.BoxGeometry(1, 1, 1);
+    let boxMaterial2 = new THREE.MeshBasicMaterial({ color: 0xFF00FF });
+    let boxMesh2 = new THREE.Mesh(boxGeometry2, boxMaterial2);
+    scene.add(boxMesh2);
+
+    // let controls = new THREE.OrbitControls(camera, renderer.domElement);
+    // controls.mouseButtons = {
+    //   MIDDLE: THREE.MOUSE.ROTATE,
+    //   SCROLL: THREE.MOUSE.DOLLY,
+    //   RIGHT: THREE.MOUSE.PAN
+    // };
+
+    //camera body
+    let cameraG = new CANNON.Box(new CANNON.Vec3(1.2, 1.2, 1.2));
+    let cameraBody = new CANNON.Body({ shape: cameraG, mass: 5 });
+    cameraBody.position.set(0, 1, 0);
+    world.addBody(cameraBody);
+
+    let controls = new THREE.PointerLockControls(camera, renderer.domElement);
+
+    document.getElementById("lock").addEventListener('click', () => {
+      controls.lock();
+    });
+
+
+
+    function processKeyboard(delta) {
+      let speed = 5;
+      let actualSpeed = speed * delta;
+      if (keyboard['w']) {
+        // cameraBody.position.x += actualSpeed * controls.getObject().rotation.x
+        controls.moveForward(actualSpeed);
+      }
+      if (keyboard['s']) {
+        controls.moveForward(-actualSpeed);
+      }
+      if (keyboard['a']) {
+        controls.moveRight(-actualSpeed);
+      }
+      if (keyboard['d']) {
+        controls.moveRight(actualSpeed);
+      }
+
+      console.log(controls.getObject().rotation)
+
+      cameraBody.position.copy(camera.position);
+
+      // camera.position.copy(cameraBody.position);
+    }
+
+    let transfromControls = new THREE.TransformControls(camera, renderer.domElement);
+    scene.add(transfromControls);
+
+    transfromControls.attach(boxMesh);
+
+    let keyboard = [];
+
+    addEventListener("keydown", (e) => {
+      keyboard[e.key] = true;
+      if (e.key == 'm') {
+
+        let boxGeometry3 = new THREE.BoxGeometry(2, 2, 2);
+        let boxMaterial3 = new THREE.MeshBasicMaterial({ color: 0x0000FF });
+        let boxMesh3 = new THREE.Mesh(boxGeometry3, boxMaterial3);
+        scene.add(boxMesh3);
+
+        transfromControls.attach(boxMesh3)
+      }
+    });
+
+    addEventListener("keyup", (e) => {
+      keyboard[e.key] = false;
+    });
+
+    let clock = new THREE.Clock();
+
+    function update() {
+      world.step(timeStamp);
+      // boxMesh.position.copy(boxBody.position);
+      // boxMesh.quaternion.copy(boxBody.quaternion);
+
+      boxMesh2.position.copy(boxBody2.position);
+      boxMesh2.quaternion.copy(boxBody2.quaternion);
+
+      if (controls.isLocked) {
+        processKeyboard(clock.getDelta());
+      }
+
+      debugRenderer.update();
+      requestAnimationFrame(update);
+
+      renderer.render(scene, camera);
+    };
+
+    update();
+
+  </script>
+</body>
